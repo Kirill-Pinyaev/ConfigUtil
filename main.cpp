@@ -1,7 +1,13 @@
-#include "lib/ConfigUtil.h"
+#include "Arguments.h"
 
 int main(int argc, char* argv[]) {
-  ConfigUtil conf;
-  conf.SplitString(argc, argv);
-  conf.PrintString();
+  Arguments args;
+  args.SplitString(argc, argv);
+  std::cout << "Vault: " << args.vault << std::endl;
+  std::cout << "Command: " << args.command << std::endl;
+  std::cout << "Args: ";
+  for (auto param : args.params) {
+    std::cout << param << " ";
+  }
+  return 0;
 }
