@@ -1,8 +1,7 @@
 #include "Arguments.h"
 
 int main(int argc, char* argv[]) {
-  Arguments args;
-  args.SplitString(argc, argv);
+  Arguments args(argc, argv);
   std::cout << "Vault: " << args.vault << std::endl;
   std::cout << "Command: " << args.command << std::endl;
   std::cout << "Args: ";

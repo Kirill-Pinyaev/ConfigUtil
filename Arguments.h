@@ -20,6 +20,6 @@ class Arguments {
   std::string vault = "config.sqlite";
   std::string command;
   std::vector<std::string> params;
-  int SplitString(int argc, char** argv);
+  Arguments(int argc, char** argv);
 };
 #endif
