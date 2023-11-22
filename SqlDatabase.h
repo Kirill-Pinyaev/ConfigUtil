@@ -9,7 +9,7 @@
 class SqlDatabase {
  public:
   sqlite3* db;
-  SqlDatabase(std::string sqlite3_value_int64);
+  SqlDatabase(std::string vault);
 };
 
 #endif
