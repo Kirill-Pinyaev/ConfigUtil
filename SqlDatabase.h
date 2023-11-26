@@ -7,9 +7,12 @@
 #include "lib/sqlite/sqlite3.h"
 
 class SqlDatabase {
- public:
+ private:
   sqlite3* db;
-  SqlDatabase(std::string vault);
+
+ public:
+  SqlDatabase(std::string& vault);
+  int CreateDatabase();
 };
 
 #endif

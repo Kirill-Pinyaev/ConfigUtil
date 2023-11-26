@@ -1,10 +1,13 @@
 #include "SqlDatabase.h"
 
-SqlDatabase::SqlDatabase(std::string vault) {
+SqlDatabase::SqlDatabase(std::string& vault) {
   int resultOpen = sqlite3_open(("../" + vault).c_str(), &db);
   if (resultOpen != SQLITE_OK) {
-    throw std::runtime_error(sqlite3_errmsg(db));
+    throw std::logic_error("Opening or creating a database failed!");
   }
+};
+
+int SqlDatabase::CreateDatabase() {
   std::string request =
       "SELECT name FROM sqlite_master WHERE type='table' AND name='data';";
   sqlite3_stmt* statement;
@@ -12,7 +15,8 @@ SqlDatabase::SqlDatabase(std::string vault) {
       sqlite3_prepare_v2(db, request.c_str(), -1, &statement, nullptr);
 
   if (resultRequest != SQLITE_OK) {
-    throw std::runtime_error(sqlite3_errmsg(db));
+    throw std::logic_error("Request failed: " +
+                           std::string(sqlite3_errmsg(db)));
   }
 
   resultRequest = sqlite3_step(statement);
@@ -28,7 +32,8 @@ SqlDatabase::SqlDatabase(std::string vault) {
     int resultCreate = sqlite3_exec(db, createTableQuery, 0, 0, 0);
 
     if (resultCreate != SQLITE_OK) {
-      throw std::runtime_error(sqlite3_errmsg(db));
+      throw std::logic_error("Creating a table failed: " +
+                             std::string(sqlite3_errmsg(db)));
     }
 
     std::cout << "The database and table have been created successfully!"
@@ -38,4 +43,5 @@ SqlDatabase::SqlDatabase(std::string vault) {
   }
 
   sqlite3_close(db);
+  return 0;
 }
