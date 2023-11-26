@@ -13,7 +13,15 @@ int main(int argc, char* argv[]) {
     }
     std::cout << std::endl;
     db.CreateDatabase();
-
+    if (args.command == "read") {
+      db.ReadDatabase(args.params[0]);
+    } else if (args.command == "write") {
+      db.WriteToDatabase(args.params[0], args.params[1]);
+    } else if (args.command == "import") {
+      std::cout << "import" << std::endl;
+    } else if (args.command == "export") {
+      std::cout << "export" << std::endl;
+    }
   } catch (const std::runtime_error& e) {
     std::cerr << "Error: " << e.what() << std::endl;
   } catch (const std::logic_error& e) {
