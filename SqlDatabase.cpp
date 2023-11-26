@@ -7,13 +7,23 @@ SqlDatabase::SqlDatabase(std::string& vault) {
   }
 };
 
+SqlDatabase::~SqlDatabase() { sqlite3_close(db); };
+
+int SqlDatabase::SplitKey(std::string& key) {
+  std::string part;
+  std::istringstream tokenStream(key);
+  while (std::getline(tokenStream, part, '.')) {
+    paramGroup.push_back(part);
+  }
+  return 1;
+};
+
 std::string SqlDatabase::ExecuteQuery(std::string& query) {
   sqlite3_stmt* stmt;
 
   int rc = sqlite3_prepare_v2(db, query.c_str(), -1, &stmt, nullptr);
 
   if (rc != SQLITE_OK) {
-    // sqlite3_close(db);
     throw std::logic_error("Request failed: " +
                            std::string(sqlite3_errmsg(db)));
   }
@@ -21,15 +31,13 @@ std::string SqlDatabase::ExecuteQuery(std::string& query) {
   rc = sqlite3_step(stmt);
 
   if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
-    // sqlite3_finalize(stmt);
-    // sqlite3_close(db);
+    sqlite3_finalize(stmt);
     throw std::logic_error("Failed to execute query: " +
                            std::string(sqlite3_errmsg(db)));
   }
 
   std::string result;
   if (rc == SQLITE_ROW) {
-    // printf("sadasd\n");
     result = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
   }
 
@@ -45,8 +53,11 @@ int SqlDatabase::CreateDatabase() {
   if (result.empty()) {
     const char* createTableQuery =
         "CREATE TABLE data ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "name TEXT NOT NULL);";
+        "GroupName TEXT,"
+        "ParentGroup TEXT,"
+        "ParameterName TEXT,"
+        "ParameterValue TEXT,"
+        "PRIMARY KEY (GroupName, ParameterName));";
 
     int resultCreate = sqlite3_exec(db, createTableQuery, 0, 0, 0);
 
@@ -65,7 +76,19 @@ int SqlDatabase::CreateDatabase() {
 };
 
 int SqlDatabase::ReadDatabase(std::string& key) {
-  std::string sqlQuery = "SELECT name FROM data WHERE id = '" + key + "';";
+  SplitKey(key);
+  std::string groupName;
+  std::string paramName;
+  if (paramGroup.size() >= 2) {
+    groupName = paramGroup.rbegin()[1];
+    paramName = paramGroup.back();
+  } else {
+    groupName = "";
+    paramName = paramGroup[0];
+  }
+  std::string sqlQuery = "SELECT ParameterValue FROM data WHERE GroupName = '" +
+                         groupName + "' AND ParameterName = '" + paramName +
+                         "';";
 
   std::string result = ExecuteQuery(sqlQuery);
   std::cout << result << std::endl;
@@ -73,10 +96,29 @@ int SqlDatabase::ReadDatabase(std::string& key) {
 };
 
 int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
+  SplitKey(key);
+  std::string groupName;
+  std::string parentGroup;
+  std::string paramName;
+  if (paramGroup.size() >= 3) {
+    parentGroup = paramGroup.rbegin()[2];
+    groupName = paramGroup.rbegin()[1];
+    paramName = paramGroup.back();
+  } else if (paramGroup.size() == 2) {
+    groupName = paramGroup[0];
+    parentGroup = "";
+    paramName = paramGroup[1];
+  } else {
+    groupName = "";
+    parentGroup = "";
+    paramName = paramGroup[0];
+  }
   std::string sqlQuery =
-      "INSERT OR REPLACE INTO data (id, name) VALUES "
-      "('" +
-      key + "', '" + value + "');";
-  std::string result = ExecuteQuery(sqlQuery);
+      "INSERT INTO data (GroupName, ParentGroup, ParameterName, "
+      "ParameterValue) VALUES ('" +
+      groupName + "', '" + parentGroup + "', '" + paramName + "', '" + value +
+      "');";
+  ExecuteQuery(sqlQuery);
+  std::cout << "Recording is successful" << std::endl;
   return 0;
 };
