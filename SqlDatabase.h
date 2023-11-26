@@ -14,6 +14,7 @@ class SqlDatabase {
   sqlite3* db;
   std::vector<std::string> paramGroup;
   std::string ExecuteQuery(std::string& query);
+  bool GroupExists(const std::string& groupName);
   int CallbackFunction(void* data, int argc, char** argv, char**);
 
  public:

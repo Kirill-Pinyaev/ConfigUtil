@@ -9,6 +9,18 @@ SqlDatabase::SqlDatabase(std::string& vault) {
 
 SqlDatabase::~SqlDatabase() { sqlite3_close(db); };
 
+bool SqlDatabase::GroupExists(const std::string& groupName) {
+  bool res = true;
+  std::string sqlQuery =
+      "SELECT 1 FROM data WHERE GroupName = '" + groupName + "' LIMIT 1;";
+  std::string resultRequest = ExecuteQuery(sqlQuery);
+  printf("%s\n", resultRequest.c_str());
+  if (resultRequest.empty()) {
+    res = false;
+  }
+  return res;
+};
+
 int SqlDatabase::SplitKey(std::string& key) {
   std::string part;
   std::istringstream tokenStream(key);
@@ -57,7 +69,8 @@ int SqlDatabase::CreateDatabase() {
         "ParentGroup TEXT,"
         "ParameterName TEXT,"
         "ParameterValue TEXT,"
-        "PRIMARY KEY (GroupName, ParameterName));";
+        "PRIMARY KEY (ParentGroup, GroupName, ParameterName),"
+        "FOREIGN KEY (ParentGroup) REFERENCES data(GroupName));";
 
     int resultCreate = sqlite3_exec(db, createTableQuery, 0, 0, 0);
 
@@ -77,6 +90,14 @@ int SqlDatabase::CreateDatabase() {
 
 int SqlDatabase::ReadDatabase(std::string& key) {
   SplitKey(key);
+  for (auto it = paramGroup.begin(); it != std::prev(paramGroup.end()); ++it) {
+    const auto& group = *it;
+
+    if (!GroupExists(group)) {
+      std::cerr << "Группа " << group << " не существует." << std::endl;
+      return 1;
+    }
+  }
   std::string groupName;
   std::string paramName;
   if (paramGroup.size() >= 2) {
@@ -97,6 +118,15 @@ int SqlDatabase::ReadDatabase(std::string& key) {
 
 int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
   SplitKey(key);
+  for (auto it = paramGroup.begin(); it != std::prev(paramGroup.end(), 2);
+       ++it) {
+    const auto& group = *it;
+
+    if (!GroupExists(group)) {
+      std::cerr << "Группа " << group << " не существует." << std::endl;
+      return 1;
+    }
+  }
   std::string groupName;
   std::string parentGroup;
   std::string paramName;
@@ -104,6 +134,13 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
     parentGroup = paramGroup.rbegin()[2];
     groupName = paramGroup.rbegin()[1];
     paramName = paramGroup.back();
+    printf("%s\n", groupName.c_str());
+    printf("%d\n", GroupExists(groupName));
+    if (GroupExists(groupName)) {
+      std::cerr << "Группа " << groupName << " уже существует." << std::endl;
+      return 1;
+    }
+
   } else if (paramGroup.size() == 2) {
     groupName = paramGroup[0];
     parentGroup = "";
@@ -114,7 +151,7 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
     paramName = paramGroup[0];
   }
   std::string sqlQuery =
-      "INSERT INTO data (GroupName, ParentGroup, ParameterName, "
+      "INSERT OR REPLACE INTO data (GroupName, ParentGroup, ParameterName, "
       "ParameterValue) VALUES ('" +
       groupName + "', '" + parentGroup + "', '" + paramName + "', '" + value +
       "');";
