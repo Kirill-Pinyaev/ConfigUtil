@@ -14,7 +14,6 @@ bool SqlDatabase::GroupExists(const std::string& groupName) {
   std::string sqlQuery =
       "SELECT 1 FROM data WHERE GroupName = '" + groupName + "' LIMIT 1;";
   std::string resultRequest = ExecuteQuery(sqlQuery);
-  // printf("%s\n", resultRequest.c_str());
   if (resultRequest.empty()) {
     res = false;
   }
@@ -101,29 +100,60 @@ int SqlDatabase::CreateDatabase() {
 
 int SqlDatabase::ReadDatabase(std::string& key) {
   SplitKey(key);
-  for (auto it = paramGroup.begin(); it != std::prev(paramGroup.end()); ++it) {
-    const auto& group = *it;
-
-    if (!GroupExists(group)) {
-      std::cerr << "Группа " << group << " не существует." << std::endl;
-      return 1;
-    }
+  std::set<std::string> groupsDuplicate(paramGroup.begin(), paramGroup.end());
+  if (groupsDuplicate.size() != paramGroup.size()) {
+    throw std::logic_error("Groups should not be repeated");
   }
   std::string groupName;
+  std::string parentGroup;
   std::string paramName;
-  if (paramGroup.size() >= 2) {
-    groupName = paramGroup.rbegin()[1];
-    paramName = paramGroup.back();
-  } else {
-    groupName = "";
-    paramName = paramGroup[0];
-  }
-  std::string sqlQuery = "SELECT ParameterValue FROM data WHERE GroupName = '" +
-                         groupName + "' AND ParameterName = '" + paramName +
-                         "';";
+  std::string exitString = "";
+  if (paramGroup.size() > 1) {
+    groupName = paramGroup[0];
+    if (GroupExists(groupName)) {
+      if (!(ParentPath(groupName, "1"))) {
+        throw std::logic_error("Wrong way");
+      }
+    }
+    for (size_t it = 1; it < paramGroup.size() - 2; ++it) {
+      const auto& groupName = paramGroup[it];
+      const auto& parentGroup = paramGroup[it - 1];
+      if (GroupExists(groupName)) {
+        if (!(ParentPath(groupName, parentGroup))) {
+          throw std::logic_error("Wrong way");
+        }
+      }
+    }
+    if (paramGroup.size() == 2) {
+      parentGroup = "1";
+      groupName = paramGroup[0];
+      paramName = paramGroup[1];
+    } else {
+      parentGroup = paramGroup.rbegin()[2];
+      groupName = paramGroup.rbegin()[1];
+      paramName = paramGroup.back();
+    }
+    if (GroupExists(groupName)) {
+      if (!(ParentPath(groupName, parentGroup))) {
+        throw std::logic_error("Wrong way");
+      } else {
+        std::string sqlQuery =
+            "SELECT ParameterValue FROM data WHERE GroupName = '" + groupName +
+            "' AND ParameterName = '" + paramName + "';";
 
-  std::string result = ExecuteQuery(sqlQuery);
-  std::cout << result << std::endl;
+        exitString = ExecuteQuery(sqlQuery);
+      }
+    }
+  } else {
+    paramName = paramGroup[0];
+    groupName = "";
+    std::string sqlQuery =
+        "SELECT ParameterValue FROM data WHERE GroupName = '" + groupName +
+        "' AND ParameterName = '" + paramName + "';";
+
+    exitString = ExecuteQuery(sqlQuery);
+  }
+  std::cout << exitString << std::endl;
   return 0;
 };
 
@@ -133,7 +163,6 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
   if (groupsDuplicate.size() != paramGroup.size()) {
     throw std::logic_error("Groups should not be repeated");
   }
-  std::vector<std::string> path;
   std::string groupName;
   std::string parentGroup;
   std::string paramName;
