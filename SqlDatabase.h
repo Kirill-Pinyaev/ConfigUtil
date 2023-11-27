@@ -2,6 +2,7 @@
 #define _SQL_DATABASE_H_
 
 #include <iostream>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -15,7 +16,7 @@ class SqlDatabase {
   std::vector<std::string> paramGroup;
   std::string ExecuteQuery(std::string& query);
   bool GroupExists(const std::string& groupName);
-  int CallbackFunction(void* data, int argc, char** argv, char**);
+  bool ParentPath(const std::string& group, const std::string& parentGroup);
 
  public:
   SqlDatabase(std::string& vault);

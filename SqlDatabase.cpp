@@ -14,8 +14,21 @@ bool SqlDatabase::GroupExists(const std::string& groupName) {
   std::string sqlQuery =
       "SELECT 1 FROM data WHERE GroupName = '" + groupName + "' LIMIT 1;";
   std::string resultRequest = ExecuteQuery(sqlQuery);
-  printf("%s\n", resultRequest.c_str());
+  // printf("%s\n", resultRequest.c_str());
   if (resultRequest.empty()) {
+    res = false;
+  }
+  return res;
+};
+
+bool SqlDatabase::ParentPath(const std::string& group,
+                             const std::string& parentGroup) {
+  bool res = true;
+  std::string sqlQuery =
+      "SELECT ParentGroup FROM data WHERE GroupName = '" + group + "';";
+
+  std::string resultRequest = ExecuteQuery(sqlQuery);
+  if (parentGroup != resultRequest) {
     res = false;
   }
   return res;
@@ -52,10 +65,9 @@ std::string SqlDatabase::ExecuteQuery(std::string& query) {
   if (rc == SQLITE_ROW) {
     result = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
   }
-
   sqlite3_finalize(stmt);
-
   return result;
+  result = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
 }
 int SqlDatabase::CreateDatabase() {
   std::string request =
@@ -65,11 +77,10 @@ int SqlDatabase::CreateDatabase() {
   if (result.empty()) {
     const char* createTableQuery =
         "CREATE TABLE data ("
-        "GroupName TEXT,"
+        "GroupName TEXT PRIMARY KEY,"
         "ParentGroup TEXT,"
         "ParameterName TEXT,"
         "ParameterValue TEXT,"
-        "PRIMARY KEY (ParentGroup, GroupName, ParameterName),"
         "FOREIGN KEY (ParentGroup) REFERENCES data(GroupName));";
 
     int resultCreate = sqlite3_exec(db, createTableQuery, 0, 0, 0);
@@ -118,44 +129,85 @@ int SqlDatabase::ReadDatabase(std::string& key) {
 
 int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
   SplitKey(key);
-  for (auto it = paramGroup.begin(); it != std::prev(paramGroup.end(), 2);
-       ++it) {
-    const auto& group = *it;
-
-    if (!GroupExists(group)) {
-      std::cerr << "Группа " << group << " не существует." << std::endl;
-      return 1;
-    }
+  std::set<std::string> groupsDuplicate(paramGroup.begin(), paramGroup.end());
+  if (groupsDuplicate.size() != paramGroup.size()) {
+    throw std::logic_error("Groups should not be repeated");
   }
+  std::vector<std::string> path;
   std::string groupName;
   std::string parentGroup;
   std::string paramName;
-  if (paramGroup.size() >= 3) {
-    parentGroup = paramGroup.rbegin()[2];
-    groupName = paramGroup.rbegin()[1];
-    paramName = paramGroup.back();
-    printf("%s\n", groupName.c_str());
-    printf("%d\n", GroupExists(groupName));
-    if (GroupExists(groupName)) {
-      std::cerr << "Группа " << groupName << " уже существует." << std::endl;
-      return 1;
+  if (paramGroup.size() > 1) {
+    groupName = paramGroup[0];
+    if (!(GroupExists(groupName))) {
+      std::string sqlQueryFirst =
+          "INSERT INTO data (GroupName, ParentGroup) "
+          " VALUES ('" +
+          groupName + "', '" + "1" + "');";
+      ExecuteQuery(sqlQueryFirst);
+    } else {
+      if (!(ParentPath(groupName, "1"))) {
+        throw std::logic_error("Wrong way");
+      }
     }
 
-  } else if (paramGroup.size() == 2) {
-    groupName = paramGroup[0];
-    parentGroup = "";
-    paramName = paramGroup[1];
+    for (size_t it = 1; it < paramGroup.size() - 2; ++it) {
+      const auto& groupName = paramGroup[it];
+      const auto& parentGroup = paramGroup[it - 1];
+      if (!(GroupExists(groupName))) {
+        std::string sqlQueryGroup =
+            "INSERT INTO data (GroupName, ParentGroup) "
+            " VALUES ('" +
+            groupName + "', '" + parentGroup + "');";
+        ExecuteQuery(sqlQueryGroup);
+      } else {
+        if (!(ParentPath(groupName, parentGroup))) {
+          throw std::logic_error("Wrong way");
+        }
+      }
+    }
+    if (paramGroup.size() == 2) {
+      groupName = paramGroup[0];
+      paramName = paramGroup[1];
+      parentGroup = "1";
+    } else {
+      groupName = paramGroup.rbegin()[1];
+      paramName = paramGroup.back();
+      parentGroup = paramGroup.rbegin()[2];
+    }
+    if (!(GroupExists(groupName))) {
+      std::string sqlQueryLast =
+          "INSERT INTO data (GroupName, ParentGroup, "
+          "ParameterName, "
+          "ParameterValue) VALUES ('" +
+          groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
+          value + "');";
+      ExecuteQuery(sqlQueryLast);
+    } else {
+      if (!(ParentPath(groupName, parentGroup))) {
+        throw std::logic_error("Wrong way");
+      } else {
+        std::string sqlQueryLast =
+            "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
+            "ParameterName, "
+            "ParameterValue) VALUES ('" +
+            groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
+            value + "');";
+        ExecuteQuery(sqlQueryLast);
+      }
+    }
   } else {
     groupName = "";
     parentGroup = "";
     paramName = paramGroup[0];
+    std::string sqlQuery =
+        "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
+        "ParameterName, "
+        "ParameterValue) VALUES ('" +
+        groupName + "', '" + parentGroup + "', '" + paramName + "', '" + value +
+        "');";
+    ExecuteQuery(sqlQuery);
   }
-  std::string sqlQuery =
-      "INSERT OR REPLACE INTO data (GroupName, ParentGroup, ParameterName, "
-      "ParameterValue) VALUES ('" +
-      groupName + "', '" + parentGroup + "', '" + paramName + "', '" + value +
-      "');";
-  ExecuteQuery(sqlQuery);
   std::cout << "Recording is successful" << std::endl;
   return 0;
 };
