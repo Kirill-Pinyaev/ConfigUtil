@@ -8,6 +8,7 @@ Arguments::Arguments(int argc, char** argv) {
         command = argv[i];
       } else {
         vault = argv[i];
+        flagVault = 1;
       }
     } else if (i == 2 && command.empty()) {
       if (std::find(comandlist.begin(), comandlist.end(), argv[i]) !=

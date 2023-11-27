@@ -1,7 +1,13 @@
 #include "SqlDatabase.h"
 
-SqlDatabase::SqlDatabase(std::string& vault) {
-  int resultOpen = sqlite3_open(("../" + vault).c_str(), &db);
+SqlDatabase::SqlDatabase(std::string& vault, int flagVault) {
+  std::string filePath;
+  if (flagVault == 0) {
+    filePath = "../config.sqlite";
+  } else {
+    filePath = vault;
+  }
+  int resultOpen = sqlite3_open(filePath.c_str(), &db);
   if (resultOpen != SQLITE_OK) {
     throw std::logic_error("Opening or creating a database failed!");
   }

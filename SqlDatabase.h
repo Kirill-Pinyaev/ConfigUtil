@@ -19,7 +19,7 @@ class SqlDatabase {
   bool ParentPath(const std::string& group, const std::string& parentGroup);
 
  public:
-  SqlDatabase(std::string& vault);
+  SqlDatabase(std::string& vault, int flagVault);
   ~SqlDatabase();
   int SplitKey(std::string& key);
   int CreateDatabase();

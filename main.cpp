@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]) {
   try {
     Arguments args(argc, argv);
-    SqlDatabase db(args.vault);
+    SqlDatabase db(args.vault, args.flagVault);
     std::cout << "Vault: " << args.vault << std::endl;
     std::cout << "Command: " << args.command << std::endl;
     std::cout << "Args: ";
