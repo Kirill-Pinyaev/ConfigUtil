@@ -1,13 +1,7 @@
 #include "SqlDatabase.h"
 
-SqlDatabase::SqlDatabase(std::string& vault, int flagVault) {
-  std::string filePath;
-  if (flagVault == 0) {
-    filePath = "../config.sqlite";
-  } else {
-    filePath = vault;
-  }
-  int resultOpen = sqlite3_open(filePath.c_str(), &db);
+SqlDatabase::SqlDatabase(std::string& vault) {
+  int resultOpen = sqlite3_open(vault.c_str(), &db);
   if (resultOpen != SQLITE_OK) {
     throw std::logic_error("Opening or creating a database failed!");
   }
@@ -22,6 +16,52 @@ bool SqlDatabase::GroupExists(const std::string& groupName) {
   std::string resultRequest = ExecuteQuery(sqlQuery);
   if (resultRequest.empty()) {
     res = false;
+  }
+  return res;
+};
+
+bool SqlDatabase::ParamExistsNonGroup(const std::string& paramName) {
+  bool res;
+  std::string sqlQuery =
+      "SELECT 1 FROM data WHERE ParameterName = '" + paramName + "';";
+  std::string resultRequest = ExecuteQuery(sqlQuery);
+  sqlQuery =
+      "SELECT GroupName FROM data WHERE ParameterName = '" + paramName + "';";
+  std::string resultRequestGroup = ExecuteQuery(sqlQuery);
+  if (!(resultRequest.empty()) && resultRequestGroup.empty()) {
+    res = false;
+  } else if (resultRequest.empty() && resultRequestGroup.empty()) {
+    res = true;
+
+  } else {
+    throw std::logic_error("Parameter " + paramName + " is not in this group ");
+  }
+  return res;
+}
+
+int SqlDatabase::ParamExists(const std::string& paramName,
+                             const std::string& groupName) {
+  int res = 0;
+  std::string sqlQuery =
+      "SELECT 1 FROM data WHERE ParameterName = '" + paramName + "';";
+  std::string resultRequest = ExecuteQuery(sqlQuery);
+  if (!(resultRequest.empty())) {
+    sqlQuery =
+        "SELECT GroupName FROM data WHERE ParameterName = '" + paramName + "';";
+    std::string resultRequestGroup = ExecuteQuery(sqlQuery);
+    if (groupName == resultRequestGroup) {
+      res = 1;
+    } else {
+      throw std::logic_error("Parameter " + paramName +
+                             " is not in this group ");
+    }
+  } else {
+    sqlQuery = "SELECT ParameterName FROM data WHERE GroupName = '" +
+               groupName + "' LIMIT 1;";
+    resultRequest = ExecuteQuery(sqlQuery);
+    if (!(resultRequest.empty())) {
+      res = 2;
+    }
   }
   return res;
 };
@@ -65,14 +105,14 @@ std::string SqlDatabase::ExecuteQuery(std::string& query) {
     throw std::logic_error("Failed to execute query: " +
                            std::string(sqlite3_errmsg(db)));
   }
-
   std::string result;
   if (rc == SQLITE_ROW) {
-    result = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    const char* text =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    result = text ? text : "";
   }
   sqlite3_finalize(stmt);
   return result;
-  result = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
 }
 int SqlDatabase::CreateDatabase() {
   std::string request =
@@ -82,9 +122,9 @@ int SqlDatabase::CreateDatabase() {
   if (result.empty()) {
     const char* createTableQuery =
         "CREATE TABLE data ("
-        "GroupName TEXT PRIMARY KEY,"
+        "GroupName TEXT,"
         "ParentGroup TEXT,"
-        "ParameterName TEXT,"
+        "ParameterName TEXT PRIMARY KEY,"
         "ParameterValue TEXT,"
         "FOREIGN KEY (ParentGroup) REFERENCES data(GroupName));";
 
@@ -222,26 +262,58 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
       if (!(ParentPath(groupName, parentGroup))) {
         throw std::logic_error("Wrong way");
       } else {
-        std::string sqlQueryLast =
-            "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
-            "ParameterName, "
-            "ParameterValue) VALUES ('" +
-            groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
-            value + "');";
-        ExecuteQuery(sqlQueryLast);
+        if (ParamExists(paramName, groupName) == 1) {
+          std::string sqlQueryLast =
+              "UPDATE data "
+              "SET ParameterValue = '" +
+              value +
+              "' "
+              "WHERE ParameterName = '" +
+              paramName + "';";
+          ExecuteQuery(sqlQueryLast);
+        } else if (ParamExists(paramName, groupName) == 0) {
+          std::string sqlQueryLast =
+              "UPDATE data "
+              "SET ParameterValue = '" +
+              value + "', ParameterName = '" + paramName +
+              "' "
+              "WHERE GroupName = '" +
+              groupName + "';";
+          ExecuteQuery(sqlQueryLast);
+        } else {
+          std::string sqlQuery =
+              "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
+              "ParameterName, "
+              "ParameterValue) VALUES ('" +
+              groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
+              value + "');";
+          ExecuteQuery(sqlQuery);
+        }
       }
     }
+
   } else {
     groupName = "";
     parentGroup = "";
     paramName = paramGroup[0];
-    std::string sqlQuery =
-        "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
-        "ParameterName, "
-        "ParameterValue) VALUES ('" +
-        groupName + "', '" + parentGroup + "', '" + paramName + "', '" + value +
-        "');";
-    ExecuteQuery(sqlQuery);
+    if (ParamExistsNonGroup(paramName)) {
+      std::string sqlQuery =
+          "INSERT OR REPLACE INTO data (GroupName, ParentGroup, "
+          "ParameterName, "
+          "ParameterValue) VALUES ('" +
+          groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
+          value + "');";
+      ExecuteQuery(sqlQuery);
+    } else {
+      std::string sqlQueryLast =
+          "UPDATE data "
+          "SET ParameterValue = '" +
+          value +
+          "' "
+          "WHERE ParameterName = '" +
+          paramName + "';";
+      ExecuteQuery(sqlQueryLast);
+    }
   }
   std::cout << "Recording is successful" << std::endl;
   return 0;

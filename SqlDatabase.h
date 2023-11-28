@@ -17,9 +17,11 @@ class SqlDatabase {
   std::string ExecuteQuery(std::string& query);
   bool GroupExists(const std::string& groupName);
   bool ParentPath(const std::string& group, const std::string& parentGroup);
+  int ParamExists(const std::string& paramName, const std::string& groupName);
+  bool ParamExistsNonGroup(const std::string& paramName);
 
  public:
-  SqlDatabase(std::string& vault, int flagVault);
+  SqlDatabase(std::string& vault);
   ~SqlDatabase();
   int SplitKey(std::string& key);
   int CreateDatabase();

@@ -18,7 +18,6 @@ class Arguments {
 
  public:
   std::string vault = "config.sqlite";
-  int flagVault = 0;
   std::string command;
   std::vector<std::string> params;
   Arguments(int argc, char** argv);

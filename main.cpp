@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]) {
   try {
     Arguments args(argc, argv);
-    SqlDatabase db(args.vault, args.flagVault);
+    SqlDatabase db(args.vault);
     std::cout << "Vault: " << args.vault << std::endl;
     std::cout << "Command: " << args.command << std::endl;
     std::cout << "Args: ";
@@ -27,10 +27,8 @@ int main(int argc, char* argv[]) {
         std::cout << "export" << std::endl;
       }
     }
-  } catch (const std::runtime_error& e) {
+  } catch (const std::exception& e) {
     std::cerr << "Error: " << e.what() << std::endl;
-  } catch (const std::logic_error& e) {
-    std::cerr << "Error: Database error: " << e.what() << std::endl;
   }
   return 0;
 }
