@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
         db.WriteToDatabase(args.params[0], args.params[1]);
       } else if (args.command == "import") {
         db.CreateDatabase();
-        std::cout << "import" << std::endl;
+        db.ImportDatabase(args.params[0]);
       } else if (args.command == "export") {
         db.CreateDatabase();
         db.ExportDatabase(args.params[0]);

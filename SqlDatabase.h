@@ -25,6 +25,10 @@ class SqlDatabase {
   int ParamExists(const std::string& paramName, const std::string& groupName);
   bool ParamExistsNonGroup(const std::string& paramName);
   std::vector<std::string> GetLastGroup(sqlite3_stmt* stmt, int rc);
+  void InsertData(const std::string& groupName, const std::string& parentGroup,
+                  const std::string& paramName, const std::string& paramValue);
+  void ProcessingJson(const json& j, const std::string& group = "",
+                      const std::string parentGroup = "");
 
  public:
   SqlDatabase(std::string& vault);
@@ -34,6 +38,7 @@ class SqlDatabase {
   int ReadDatabase(std::string& key);
   int WriteToDatabase(std::string& key, std::string& value);
   int ExportDatabase(std::string& path);
+  int ImportDatabase(std::string& path);
 };
 
 #endif

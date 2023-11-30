@@ -437,4 +437,70 @@ std::vector<std::string> SqlDatabase::GetLastGroup(sqlite3_stmt* stmt, int rc) {
     flag = 0;
   }
   return lastGroups;
+};
+
+int SqlDatabase::ImportDatabase(std::string& path) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    throw std::logic_error("File not found");
+  }
+  json j;
+  file >> j;
+
+  std::string countRowsQuery = "SELECT COUNT(*) FROM data;";
+  std::string countRows = ExecuteQuery(countRowsQuery);
+  int rows = std::stoi(countRows);
+  if (rows > 0) {
+    std::cout << "A database with that name already exists, do you want to "
+                 "clear it? y/n"
+              << std::endl;
+    std::string answer;
+    std::cin >> answer;
+    if (answer == "y") {
+      std::string truncateQuery = "DELETE FROM data;";
+      ExecuteQuery(truncateQuery);
+      std::cout << "Data successfully cleared" << std::endl;
+    } else {
+      return 0;
+    }
+  }
+  ProcessingJson(j);
+  return 0;
+};
+
+void SqlDatabase::InsertData(const std::string& groupName,
+                             const std::string& parentGroup,
+                             const std::string& paramName,
+                             const std::string& paramValue) {
+  std::string insertQuery;
+  if (groupName == "") {
+    insertQuery =
+        "INSERT INTO data (ParameterName, "
+        "ParameterValue) VALUES ('" +
+        paramName + "', '" + paramValue + "');";
+  }
+  if (parentGroup == "") {
+    insertQuery =
+        "INSERT INTO data (GroupName, ParameterName, "
+        "ParameterValue) VALUES ('" +
+        groupName + "', '" + paramName + "', '" + paramValue + "');";
+  } else {
+    insertQuery =
+        "INSERT INTO data (GroupName, ParentGroup, ParameterName, "
+        "ParameterValue) VALUES ('" +
+        groupName + "', '" + parentGroup + "', '" + paramName + "', '" +
+        paramValue + "');";
+  }
+  ExecuteQuery(insertQuery);
+};
+
+void SqlDatabase::ProcessingJson(const json& j, const std::string& group,
+                                 const std::string parentGroup) {
+  for (auto it = j.begin(); it != j.end(); ++it) {
+    if (it.value().is_object()) {
+      ProcessingJson(it.value(), it.key(), group);
+    } else {
+      InsertData(group, parentGroup, it.key(), it.value());
+    }
+  }
 }
