@@ -26,10 +26,8 @@ bool SqlDatabase::ParamExistsNonGroup(const std::string& paramName) {
                          paramName + "' AND GroupName = '';";
   std::string resultRequest = ExecuteQuery(sqlQuery);
   if (resultRequest.empty()) {
-    printf("resultRequest and resultRequestGroup are empty\n");
     res = true;
   } else {
-    printf("resultRequest and resultRequestGroup are not empty\n");
     res = false;
   }
   return res;
@@ -46,11 +44,9 @@ int SqlDatabase::ParamExists(const std::string& paramName,
              "' AND GroupName = '" + groupName + "';";
   std::string resultRequestParam = ExecuteQuery(sqlQuery);
   if (resultRequest.empty()) {
-    printf("resultRequest is not empty\n");
     res = 0;
   } else if (!resultRequestParam.empty()) {
     res = 1;
-    printf("resultRequest is empty\n");
   }
   return res;
 };
@@ -327,12 +323,12 @@ int SqlDatabase::ExportDatabase(std::string& path) {
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
     const char* paramValue =
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-    if ((groupName = "") && !parentGroup) {
+    if (*groupName == 0 && !parentGroup) {
       if (paramName) {
         jsonData[paramName] = paramValue;
       }
     }
-    if (groupName && groupName != "" && !parentGroup) {
+    if (groupName && *groupName != 0 && !parentGroup) {
       if (paramName) {
         jsonData[groupName][paramName] = paramValue;
       }
@@ -462,15 +458,26 @@ void SqlDatabase::InsertData(const std::string& groupName,
   std::string insertQuery;
   if (groupName == "") {
     insertQuery =
-        "INSERT INTO data (ParameterName, "
-        "ParameterValue) VALUES ('" +
-        paramName + "', '" + paramValue + "');";
-  }
-  if (parentGroup == "") {
-    insertQuery =
         "INSERT INTO data (GroupName, ParameterName, "
-        "ParameterValue) VALUES ('" +
-        groupName + "', '" + paramName + "', '" + paramValue + "');";
+        "ParameterValue) VALUES ('', '" +
+        paramName + "', '" + paramValue + "');";
+  } else if (parentGroup == "") {
+    if (paramName == "" && paramValue == "") {
+      insertQuery =
+          "INSERT INTO data (GroupName"
+          ") VALUES ('" +
+          groupName + "');";
+    } else {
+      insertQuery =
+          "INSERT INTO data (GroupName, ParameterName, "
+          "ParameterValue) VALUES ('" +
+          groupName + "', '" + paramName + "', '" + paramValue + "');";
+    }
+  } else if (paramName == "" && paramValue == "") {
+    insertQuery =
+        "INSERT INTO data (GroupName, ParentGroup"
+        ") VALUES ('" +
+        groupName + "', '" + parentGroup + "');";
   } else {
     insertQuery =
         "INSERT INTO data (GroupName, ParentGroup, ParameterName, "
@@ -483,11 +490,18 @@ void SqlDatabase::InsertData(const std::string& groupName,
 
 void SqlDatabase::ProcessingJson(const json& j, const std::string& group,
                                  const std::string parentGroup) {
+  bool groupHasParameters = true;
+
   for (auto it = j.begin(); it != j.end(); ++it) {
     if (it.value().is_object()) {
       ProcessingJson(it.value(), it.key(), group);
     } else {
       InsertData(group, parentGroup, it.key(), it.value());
+      groupHasParameters = false;
     }
+  }
+
+  if (groupHasParameters) {
+    InsertData(group, parentGroup, "", "");
   }
 }
