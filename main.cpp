@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
         std::cout << "import" << std::endl;
       } else if (args.command == "export") {
         db.CreateDatabase();
-        std::cout << "export" << std::endl;
+        db.ExportDatabase(args.params[0]);
       }
     }
   } catch (const std::exception& e) {
