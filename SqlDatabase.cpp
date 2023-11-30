@@ -22,46 +22,35 @@ bool SqlDatabase::GroupExists(const std::string& groupName) {
 
 bool SqlDatabase::ParamExistsNonGroup(const std::string& paramName) {
   bool res;
-  std::string sqlQuery =
-      "SELECT 1 FROM data WHERE ParameterName = '" + paramName + "';";
+  std::string sqlQuery = "SELECT 1 FROM data WHERE ParameterName = '" +
+                         paramName + "' AND GroupName = '';";
   std::string resultRequest = ExecuteQuery(sqlQuery);
-  sqlQuery =
-      "SELECT GroupName FROM data WHERE ParameterName = '" + paramName + "';";
-  std::string resultRequestGroup = ExecuteQuery(sqlQuery);
-  if (!(resultRequest.empty()) && resultRequestGroup.empty()) {
-    res = false;
-  } else if (resultRequest.empty() && resultRequestGroup.empty()) {
+  if (resultRequest.empty()) {
+    printf("resultRequest and resultRequestGroup are empty\n");
     res = true;
-
   } else {
-    throw std::logic_error("Parameter " + paramName + " is not in this group ");
+    printf("resultRequest and resultRequestGroup are not empty\n");
+    res = false;
   }
   return res;
 }
 
 int SqlDatabase::ParamExists(const std::string& paramName,
                              const std::string& groupName) {
-  int res = 0;
+  int res = 2;
+
   std::string sqlQuery =
-      "SELECT 1 FROM data WHERE ParameterName = '" + paramName + "';";
+      "SELECT ParameterName FROM data WHERE GroupName = '" + groupName + "';";
   std::string resultRequest = ExecuteQuery(sqlQuery);
-  if (!(resultRequest.empty())) {
-    sqlQuery =
-        "SELECT GroupName FROM data WHERE ParameterName = '" + paramName + "';";
-    std::string resultRequestGroup = ExecuteQuery(sqlQuery);
-    if (groupName == resultRequestGroup) {
-      res = 1;
-    } else {
-      throw std::logic_error("Parameter " + paramName +
-                             " is not in this group ");
-    }
-  } else {
-    sqlQuery = "SELECT ParameterName FROM data WHERE GroupName = '" +
-               groupName + "' LIMIT 1;";
-    resultRequest = ExecuteQuery(sqlQuery);
-    if (!(resultRequest.empty())) {
-      res = 2;
-    }
+  sqlQuery = "SELECT 1 FROM data WHERE ParameterName = '" + paramName +
+             "' AND GroupName = '" + groupName + "';";
+  std::string resultRequestParam = ExecuteQuery(sqlQuery);
+  if (resultRequest.empty()) {
+    printf("resultRequest is not empty\n");
+    res = 0;
+  } else if (!resultRequestParam.empty()) {
+    res = 1;
+    printf("resultRequest is empty\n");
   }
   return res;
 };
@@ -124,7 +113,7 @@ int SqlDatabase::CreateDatabase() {
         "CREATE TABLE data ("
         "GroupName TEXT,"
         "ParentGroup TEXT,"
-        "ParameterName TEXT PRIMARY KEY,"
+        "ParameterName TEXT,"
         "ParameterValue TEXT,"
         "FOREIGN KEY (ParentGroup) REFERENCES data(GroupName));";
 
@@ -157,7 +146,7 @@ int SqlDatabase::ReadDatabase(std::string& key) {
   if (paramGroup.size() > 1) {
     groupName = paramGroup[0];
     if (GroupExists(groupName)) {
-      if (!(ParentPath(groupName, "1"))) {
+      if (!(ParentPath(groupName, ""))) {
         throw std::logic_error("Wrong way");
       }
     }
@@ -171,7 +160,7 @@ int SqlDatabase::ReadDatabase(std::string& key) {
       }
     }
     if (paramGroup.size() == 2) {
-      parentGroup = "1";
+      parentGroup = "";
       groupName = paramGroup[0];
       paramName = paramGroup[1];
     } else {
@@ -262,16 +251,7 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
       if (!(ParentPath(groupName, parentGroup))) {
         throw std::logic_error("Wrong way");
       } else {
-        if (ParamExists(paramName, groupName) == 1) {
-          std::string sqlQueryLast =
-              "UPDATE data "
-              "SET ParameterValue = '" +
-              value +
-              "' "
-              "WHERE ParameterName = '" +
-              paramName + "';";
-          ExecuteQuery(sqlQueryLast);
-        } else if (ParamExists(paramName, groupName) == 0) {
+        if (ParamExists(paramName, groupName) == 0) {
           std::string sqlQueryLast =
               "UPDATE data "
               "SET ParameterValue = '" +
@@ -279,6 +259,15 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
               "' "
               "WHERE GroupName = '" +
               groupName + "';";
+          ExecuteQuery(sqlQueryLast);
+        } else if (ParamExists(paramName, groupName) == 1) {
+          std::string sqlQueryLast =
+              "UPDATE data "
+              "SET ParameterValue = '" +
+              value +
+              "' "
+              "WHERE ParameterName = '" +
+              paramName + "' AND GroupName = '" + groupName + "';";
           ExecuteQuery(sqlQueryLast);
         } else {
           std::string sqlQuery =
@@ -293,14 +282,12 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
     }
 
   } else {
-    groupName = "";
-    parentGroup = "";
     paramName = paramGroup[0];
     if (ParamExistsNonGroup(paramName)) {
       std::string sqlQuery =
-          "INSERT OR REPLACE INTO data ("
+          "INSERT OR REPLACE INTO data (GroupName, "
           "ParameterName, "
-          "ParameterValue) VALUES ('" +
+          "ParameterValue) VALUES ('', '" +
           paramName + "', '" + value + "');";
       ExecuteQuery(sqlQuery);
     } else {
@@ -310,7 +297,7 @@ int SqlDatabase::WriteToDatabase(std::string& key, std::string& value) {
           value +
           "' "
           "WHERE ParameterName = '" +
-          paramName + "';";
+          paramName + "' AND GroupName = '';";
       ExecuteQuery(sqlQueryLast);
     }
   }
@@ -340,12 +327,12 @@ int SqlDatabase::ExportDatabase(std::string& path) {
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
     const char* paramValue =
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
-    if (!groupName && !parentGroup) {
+    if ((groupName = "") && !parentGroup) {
       if (paramName) {
         jsonData[paramName] = paramValue;
       }
     }
-    if (groupName && !parentGroup) {
+    if (groupName && groupName != "" && !parentGroup) {
       if (paramName) {
         jsonData[groupName][paramName] = paramValue;
       }
@@ -371,7 +358,7 @@ int SqlDatabase::ExportDatabase(std::string& path) {
         const char* paramValue =
             reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
 
-        if (groupName) {
+        if (groupName && groupName != "") {
           if (groupNow == groupName) {
             if (parentGroup) {
               groupNext = parentGroup;
