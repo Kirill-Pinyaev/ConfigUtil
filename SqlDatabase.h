@@ -39,6 +39,12 @@ class SqlDatabase {
   int WriteToDatabase(std::string& key, std::string& value);
   int ExportDatabase(std::string& path);
   int ImportDatabase(std::string& path);
+  std::vector<std::string> CheckGroup(sqlite3_stmt* stmt, int rc,
+                                      std::string& group);
+  json FillGroup(sqlite3_stmt* stmt, int rc, std::string& groupStart,
+                 std::string& groupEnd);
+  std::string FindPathGroup(sqlite3_stmt* stmt, int rc, std::string& exitGroup,
+                            std::vector<std::string>& lastGroups);
 };
 
 #endif

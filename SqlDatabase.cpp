@@ -336,48 +336,72 @@ int SqlDatabase::ExportDatabase(std::string& path) {
   }
   std::vector<std::string> lastGroups = GetLastGroup(stmt, rc);
   for (auto& group : lastGroups) {
-    std::string groupNow = group;
-    std::string groupNext;
-    json rowFirst;
-    json rowSecond;
-    int finishedGroup = 0;
+    if (std::find(lastGroups.begin(), lastGroups.end(), group) !=
+        lastGroups.end()) {
+      std::string groupNow = group;
+      std::string groupNext;
+      json rowFirst;
+      json rowSecond;
+      int finishedGroup = 0;
+      std::vector<std::string> groups;
+      // int flagGroupIngroup = 0;
+      while (true) {
+        while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+          const char* groupName =
+              reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+          const char* parentGroup =
+              reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
 
-    while (true) {
-      while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
-        const char* groupName =
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        const char* parentGroup =
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+          const char* paramName =
+              reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+          const char* paramValue =
+              reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
 
-        const char* paramName =
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
-        const char* paramValue =
-            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+          if (groupName && groupName != "") {
+            if (groupNow == groupName) {
+              if (parentGroup) {
+                groupNext = parentGroup;
 
-        if (groupName && groupName != "") {
-          if (groupNow == groupName) {
-            if (parentGroup) {
-              groupNext = parentGroup;
-            } else {
-              finishedGroup = 1;
-            }
-            if (paramName) {
-              rowFirst[paramName] = paramValue;
+              } else {
+                // printf("exit: %s\n", groupNow.c_str());
+                finishedGroup = 1;
+              }
+              if (paramName) {
+                rowFirst[paramName] = paramValue;
+              }
             }
           }
         }
+        groups = CheckGroup(stmt, rc, groupNow);
+        if (groups.size() > 0) {
+          for (auto& groupInFor : groups) {
+            if (groups.size() > 1) {
+              std::string groupLast =
+                  FindPathGroup(stmt, rc, groupInFor, lastGroups);
+              rowFirst[groupInFor] = FillGroup(stmt, rc, groupLast, groupInFor);
+              if (groupLast != group) {
+                lastGroups.erase(std::remove(lastGroups.begin(),
+                                             lastGroups.end(), groupLast),
+                                 lastGroups.end());
+                for (auto& group12333 : lastGroups) {
+                }
+              }
+            }
+          }
+        }
+
+        if (finishedGroup == 1) {
+          jsonData[groupNow] = rowFirst;
+          break;
+        }
+
+        rowSecond[groupNow] = rowFirst;
+        rowFirst = rowSecond;
+        rowSecond.clear();
+        groupNow = groupNext;
       }
-      if (finishedGroup == 1) {
-        jsonData[groupNow] = rowFirst;
-        break;
-      }
-      rowSecond[groupNow] = rowFirst;
-      rowFirst = rowSecond;
-      rowSecond.clear();
-      groupNow = groupNext;
     }
   }
-
   if (rc != SQLITE_DONE) {
     throw std::logic_error("Request failed: " +
                            std::string(sqlite3_errmsg(db)));
@@ -385,11 +409,100 @@ int SqlDatabase::ExportDatabase(std::string& path) {
   std::ofstream outFile(path);
   outFile << std::setw(4) << jsonData << std::endl;
   outFile.close();
-
+  sqlite3_finalize(stmt);
   std::cout << "Data successfully written to output.json" << std::endl;
 
   return 0;
 };
+
+json SqlDatabase::FillGroup(sqlite3_stmt* stmt, int rc, std::string& groupStart,
+                            std::string& groupEnd) {
+  std::string groupNow = groupStart;
+  std::string groupNext;
+  json rowFirst;
+  json rowSecond;
+  int finishedGroup = 0;
+  while (true) {
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+      const char* groupName =
+          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+      const char* parentGroup =
+          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+      const char* paramName =
+          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+      const char* paramValue =
+          reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+      if (groupName && groupName != "") {
+        if (groupNow == groupName) {
+          if (parentGroup) {
+            if (groupNow == groupEnd) {
+              finishedGroup = 1;
+            } else {
+              groupNext = parentGroup;
+            }
+
+          } else {
+            finishedGroup = 1;
+          }
+          if (paramName) {
+            rowFirst[paramName] = paramValue;
+          }
+        }
+      }
+    }
+    if (finishedGroup == 1) {
+      break;
+    }
+
+    rowSecond[groupNow] = rowFirst;
+    rowFirst = rowSecond;
+    rowSecond.clear();
+    groupNow = groupNext;
+  }
+  return rowFirst;
+};
+
+std::string SqlDatabase::FindPathGroup(sqlite3_stmt* stmt, int rc,
+                                       std::string& exitGroup,
+                                       std::vector<std::string>& lastGroups) {
+  std::string startGroup;
+  for (auto& group : lastGroups) {
+    std::string groupNow = group;
+    std::string groupNext;
+    int finishedGroup = 0;
+    while (true) {
+      while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        const char* groupNameNow =
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        const char* parentGroupNow =
+            reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (groupNameNow) {
+          if (groupNow == groupNameNow) {
+            if (parentGroupNow) {
+              groupNext = parentGroupNow;
+            } else {
+              finishedGroup = 1;
+            }
+            if (exitGroup == groupNameNow) {
+              startGroup = group;
+            }
+          }
+        }
+      }
+      if (!startGroup.empty()) {
+        break;
+      }
+      if (finishedGroup == 1) {
+        break;
+      }
+      groupNow = groupNext;
+    }
+    if (!startGroup.empty()) {
+      break;
+    }
+  }
+  return startGroup;
+}
 
 std::vector<std::string> SqlDatabase::GetLastGroup(sqlite3_stmt* stmt, int rc) {
   std::vector<std::string> lastGroups;
@@ -421,6 +534,23 @@ std::vector<std::string> SqlDatabase::GetLastGroup(sqlite3_stmt* stmt, int rc) {
   }
   return lastGroups;
 };
+
+std::vector<std::string> SqlDatabase::CheckGroup(sqlite3_stmt* stmt, int rc,
+                                                 std::string& group) {
+  std::vector<std::string> groups;
+  while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+    const char* groupNameNow =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+    const char* parentGroupNow =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+    if (groupNameNow && parentGroupNow) {
+      if (group == parentGroupNow) {
+        groups.push_back(groupNameNow);
+      }
+    }
+  }
+  return groups;
+}
 
 int SqlDatabase::ImportDatabase(std::string& path) {
   std::ifstream file(path);
