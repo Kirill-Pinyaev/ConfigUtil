@@ -18,6 +18,7 @@ using json = nlohmann::json;
 class SqlDatabase {
  private:
   sqlite3* db;
+  std::vector<std::string> groupsGlobal;
   std::vector<std::string> paramGroup;
   std::string ExecuteQuery(std::string& query);
   bool GroupExists(const std::string& groupName,
@@ -31,6 +32,7 @@ class SqlDatabase {
 
   std::string GetSubstringUntilNPeriod(const std::string& input, size_t n,
                                        size_t m);
+  int CountDots(const std::string& str);
 
  public:
   SqlDatabase(std::string& vault);

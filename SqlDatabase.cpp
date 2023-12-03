@@ -130,8 +130,12 @@ int SqlDatabase::ExportDatabase(std::string& path) {
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
     const char* value =
         reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
-    jsonData = FillGroup(1, name);
-    printf("%s\n", jsonData.dump().c_str());
+    std::string nameGroup = GetSubstringUntilNPeriod(name, 0, 1);
+    nameGroup = nameGroup.erase(nameGroup.size() - 1);
+    if (jsonData.find(nameGroup) == jsonData.end()) {
+      jsonData[nameGroup] = FillGroup(1, name);
+    }
+    // printf("%s\n", jsonData.dump().c_str());
   }
   //   const char* groupName =
   //       reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
@@ -237,11 +241,13 @@ int SqlDatabase::ExportDatabase(std::string& path) {
 json SqlDatabase::FillGroup(int i, const char* name) {
   sqlite3_stmt* stmtIn;
   json row;
-  int flagGroup = 1;
-  // std::string find = GetSubstringUntilNPeriod(name, i, 0);
-  printf("%s\n", name);
-  printf("%d\n", i);
+  json row2;
+  int flagGroup = 0;
+  std::string find;
+  // printf("%s\n", name);
+  // printf("%d\n", i);
   // printf("%s\n", find.c_str());
+  // // printf("%s\n", find.c_str());
   std::string sqlQuery =
       "SELECT name FROM data WHERE Name "
       "LIKE '" +
@@ -252,28 +258,61 @@ json SqlDatabase::FillGroup(int i, const char* name) {
     throw std::logic_error("Request failed: " +
                            std::string(sqlite3_errmsg(db)));
   }
-
-  while (sqlite3_step(stmtIn) == SQLITE_ROW) {
+  while ((rcIn = sqlite3_step(stmtIn)) == SQLITE_ROW) {
+    flagGroup = 0;
     const char* nameIn =
         reinterpret_cast<const char*>(sqlite3_column_text(stmtIn, 0));
 
-    if (nameIn != name) {
-      row[GetSubstringUntilNPeriod(name, i + 1, i)] = FillGroup(i + 1, nameIn);
-      flagGroup = 0;
+    if (i != CountDots(nameIn)) {
+      if (std::find(groupsGlobal.begin(), groupsGlobal.end(), nameIn) ==
+          groupsGlobal.end()) {
+        find = GetSubstringUntilNPeriod(nameIn, i, i + 1);
+        row[find.erase(find.size() - 1)] = FillGroup(i + 1, nameIn);
+
+        groupsGlobal.push_back(nameIn);
+      }
+    } else {
+      find = GetSubstringUntilNPeriod(nameIn, i, i + 1);
+      sqlQuery =
+          "SELECT Value FROM data WHERE Name = '" + std::string(nameIn) + "';";
+      std::string res = ExecuteQuery(sqlQuery);
+      row[find] = res;
+      groupsGlobal.push_back(nameIn);
+      flagGroup = 1;
     }
   }
-  if (flagGroup) {
-    row[GetSubstringUntilNPeriod(name, i + 1, i)] = "";
-    printf("asd\n");
-  }
-
   sqlite3_finalize(stmtIn);
   return row;
 };
 
 std::string SqlDatabase::GetSubstringUntilNPeriod(const std::string& input,
                                                   size_t n, size_t m) {
-  return input.substr(m, n - m + 1);
+  int dotCount = 0;
+  std::string result;
+
+  for (char ch : input) {
+    if (dotCount >= n && dotCount <= m) {
+      result += ch;
+    }
+    if (ch == '.') {
+      dotCount++;
+
+    } else if (dotCount > 0 && dotCount < n) {
+      // Пропускаем символы до n-й точки
+      continue;
+    }
+
+    if (dotCount >= m) {
+      // Достигнута m-я точка, завершаем цикл
+      break;
+    }
+  }
+
+  return result;
+};
+
+int SqlDatabase::CountDots(const std::string& str) {
+  return std::count(str.begin(), str.end(), '.');
 }
 
 // std::string SqlDatabase::FindPathGroup(sqlite3_stmt* stmt, int rc,
